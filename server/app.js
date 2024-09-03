@@ -1,63 +1,34 @@
 const express = require('express')
 const http = require('http')
 const socketIo = require('socket.io')
-const cors = require('cors')
-const bcrypt = require('bcryptjs')
+const cors = require('cors') // Importa el paquete cors
 const jwt = require('jsonwebtoken')
+const { pool } = require('./databaseconfig.js')
 
 const app = express()
 const server = http.createServer(app)
 
 const io = socketIo(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  },
-});
-
-
+    origin: '*', // Permitir cualquier origen
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Permitir estos métodos HTTP
+    allowedHeaders: ['Content-Type', 'Authorization'] // Permitir estos encabezados
+  }
+})
 
 app.use(
   cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: '*', // Permitir cualquier origen
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Permitir estos métodos HTTP
+    allowedHeaders: ['Content-Type', 'Authorization'] // Permitir estos encabezados
   })
 )
 
 app.use(express.json())
 
-const users = [
-  {
-    id: 1,
-    username: 'p',
-    password: '1',
-  },
-  {
-    id: 2,
-    username: 'janedoe',
-    password: '67890',
-  },
-]
-let entries = [
-  {
-    id: 1,
-    fecha: '2024-08-21',
-    monto: 1500,
-    beneficiario: 'John Doe',
-    usuario: 'Jane Smith',
-  },
-  {
-    id: 2,
-    fecha: '2024-08-21',
-    monto: 1500,
-    beneficiario: 'John Doe',
-    usuario: 'Jane Smith',
-  },
-]
-const secret = 'gatito'
-
+const secret = 'gatito' // Cambia esto por una clave secreta segura
+let entries = []
+// Middleware para verificar el token JWT
 const authenticateToken = (req, res, next) => {
   const token = req.headers['authorization']
   if (!token) return res.sendStatus(401)
@@ -73,59 +44,60 @@ app.get('/', (req, res) => {
   res.json('is working')
 })
 
-app.post('/api/register', async (req, res) => {
-  const { username, password } = req.body
-  // const hashedPassword = await bcrypt.hash(password, 10);
-  const hashedPassword = password
-  const user = { id: users.length + 1, username, password: hashedPassword }
-  users.push(user)
-  res.status(201).json(user)
-})
-
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body
-  const user = users.find((u) => u.username === username)
-  if (!user) return res.status(400).json({ message: 'Usuario no encontrado' })
 
-  // const validPassword = await bcrypt.compare(password, user.password);
-  const validPassword = password == user.password
-  if (!validPassword)
-    return res.status(400).json({ message: 'Contraseña incorrecta' })
+  const [data] = await pool
+    .promise()
+    .query('SELECT * FROM `users` WHERE `name` = ? AND `accesscode` = ?', [
+      username,
+      password
+    ])
 
-  const token = jwt.sign({ id: user.id, username: user.username }, secret, {
-    expiresIn: '1h',
-  })
-  res.json({ token })
+  if (data.length === 0) {
+    res.status(400).json({ message: 'Usuario no encontrado' })
+  } else {
+    const user = data[0]
+    const token = jwt.sign(
+      { id: user.id, username: user.name, role: user.rol }, // Incluye el rol en el token
+      secret,
+      {
+        expiresIn: '16h'
+      }
+    )
+    res.json({ token })
+  }
 })
 
+// Rutas protegidas
 // app.get('/api/entries', authenticateToken, (req, res) => {
 //   res.json(entries)
 // })
 
-app.get('/api/entries', (req, res) => {
-  res.json(entries)
+app.get('/api/entries', async (req, res) => {
+  const [data] = await pool
+    .promise()
+    .query(
+      'SELECT `e`.*, `u`.`name` as `usuario` FROM `entries` `e` JOIN `users` `u` ON `e`.`usuario` = `u`.id ORDER BY `e`.`id`'
+    )
+  console.log(data)
+  res.json(data)
 })
 
-
-app.post('/api/entries', authenticateToken, (req, res) => {
+app.post('/api/entries', authenticateToken, async (req, res) => {
   const entry = {
     ...req.body,
-    id: entries.length + 1,
-    usuario: req.user.username,
+    // id: entries.length + 1, // ESTO NO HACE FALTA PORQUE YA LO HACE LA BASE DE DATOS
+    usuario: req.user.id
   }
-  entries.push(entry)
+  // entries.push(entry)
+  const query = 'INSERT INTO `entries` SET ?'
+  await pool.promise().query(query, entry)
   io.emit('newEntry', entry)
   res.status(201).json(entry)
 })
 
-// app.delete('/api/entries/:id', authenticateToken, (req, res) => {
-//   const { id } = req.params
-//   entries = entries.filter((entry) => entry.id !== parseInt(id))
-//   io.emit('deleteEntry', id)
-//   res.status(204).send()
-// })
-
-app.delete('/api/entries/:id', (req, res) => {
+app.delete('/api/entries/:id', authenticateToken, (req, res) => {
   const { id } = req.params
   entries = entries.filter((entry) => entry.id !== parseInt(id))
   io.emit('deleteEntry', id)
@@ -139,6 +111,6 @@ io.on('connection', (socket) => {
   })
 })
 
-server.listen(4000, '0.0.0.0', () => {
+server.listen(4000, () => {
   console.log('Server is running on http://0.0.0.0:4000')
 })

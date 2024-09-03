@@ -1,51 +1,38 @@
-# React + TypeScript + Vite
+programa para llevar las cuentas por pagar del ayuntamiento.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+las cuentas por pagar son entradas de compromisos a pagar ejemplo "pepe" le dice al alcalde que se le daño su motor y que necesita unas piezas, el alcalde le dice que vaya al departamento de compras que el llamara para que lo ayuden. El departamento de compras gestionara el proceso para lograr la peticion. luego ella crea la entrada de esa "orden de compra o CREDITO o ESPERANDO CHEQUE" y ahi usa el programa.
 
-Currently, two official plugins are available:
+el programa necesita mandar una notificacion a todas las computadoras con el sistema instalado
+de que se ha generado una nueva entrada o el balance de las cuentas por pagar haya bajado o subido.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+el programa sera una tabla como si fuera un simple exel solo que estara vinculado a la base de datos y cada cambio GUARDADO sera notificado a todos los sistemas mas a futuro poder especificar a que sistemas se les notificara especificamente.
 
-## Expanding the ESLint configuration
+la tabla tendra:
+el valor total de todas las entradas registradas en pesos.
+las entradas ordenadas por id, fecha, monto, beneficiaro, usuario.
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+podras editar o borrar entradas que haya creado el mismo usuario y al crear entradas se le asignara automaticante la persona que la creo.
 
-- Configure the top-level `parserOptions` property like this:
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
+para que funcione en red local hay que cambiar vite config
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    host: '0.0.0.0', // Escuchar en todas las interfaces de red
+    port: 5173,      // El puerto que quieres usar, predeterminado es 5173
   },
 })
-```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+y el listen del sv
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
-
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
+server.listen(4000, '0.0.0.0', () => {
+  console.log('Server is running on http://0.0.0.0:4000')
 })
-```
 
+
+y el socket del lado del cliente
+
+import { io } from 'socket.io-client';
+
+const socket = io('http://192.168.1.13:4000'); 
